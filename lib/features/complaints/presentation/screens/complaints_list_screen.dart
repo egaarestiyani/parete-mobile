@@ -1,31 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../app/main_tab_navigation.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/models/pengaduan_model.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/pengaduan_service.dart';
 import 'create_complaint_screen.dart';
-
-enum ComplaintStatus { diproses, diterima, selesai }
-
-class ComplaintItem {
-  const ComplaintItem({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.category,
-    required this.dateLabel,
-    required this.status,
-  });
-
-  final String id;
-  final String title;
-  final String description;
-  final String category;
-  final String dateLabel;
-  final ComplaintStatus status;
-
-  bool get isActive => status == ComplaintStatus.diproses || status == ComplaintStatus.diterima;
-}
 
 class ComplaintsListScreen extends StatefulWidget {
   const ComplaintsListScreen({super.key});
@@ -39,52 +22,55 @@ class ComplaintsListScreen extends StatefulWidget {
 class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
   static const Color _headerBlue = Color(0xFF3A8FD9);
 
-  int _tabIndex = 0; // 0 Semua, 1 Aktif, 2 Selesai
+  int _tabIndex = 0;
+  bool _loading = true;
+  String? _error;
+  List<PengaduanModel> _all = [];
 
-  static final List<ComplaintItem> _all = [
-    ComplaintItem(
-      id: '#ADU-031',
-      title: 'Lampu Jalan Gang Mawar Mati',
-      description: 'Lampu penerangan di gang Mawar padam sejak dua malam lalu, mohon segera ditindaklanjuti.',
-      category: 'Infrastruktur',
-      dateLabel: '5 Mar 2025',
-      status: ComplaintStatus.diproses,
-    ),
-    ComplaintItem(
-      id: '#ADU-028',
-      title: 'Sampah Menumpuk di Ujung Gang',
-      description: 'Tumpukan sampah tidak diangkut dan mulai menimbulkan bau tidak sedap di ujung gang.',
-      category: 'Kebersihan',
-      dateLabel: '4 Mar 2025',
-      status: ComplaintStatus.diterima,
-    ),
-    ComplaintItem(
-      id: '#ADU-019',
-      title: 'Pintu Pos RT Rusak',
-      description: 'Engsel pintu pos RT longgar dan sulit ditutup, dikhawatirkan rawan keamanan malam hari.',
-      category: 'Keamanan',
-      dateLabel: '28 Feb 2025',
-      status: ComplaintStatus.selesai,
-    ),
-    ComplaintItem(
-      id: '#ADU-015',
-      title: 'Got Mampet Depan Rumah Pak RT',
-      description: 'Air meluap saat hujan deras karena saluran got tersumbat dedaunan dan plastik.',
-      category: 'Infrastruktur',
-      dateLabel: '20 Feb 2025',
-      status: ComplaintStatus.diproses,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
-  List<ComplaintItem> get _visible {
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final api = context.read<AuthService>().api;
+      final items = await PengaduanService(api).fetch();
+      if (!mounted) return;
+      setState(() {
+        _all = items;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  List<PengaduanModel> get _visible {
     switch (_tabIndex) {
       case 1:
         return _all.where((e) => e.isActive).toList();
       case 2:
-        return _all.where((e) => e.status == ComplaintStatus.selesai).toList();
+        return _all
+            .where((e) => e.status == ComplaintStatusUi.selesai || e.status == ComplaintStatusUi.ditolak)
+            .toList();
       default:
         return _all;
     }
+  }
+
+  Future<void> _openCreate() async {
+    final created = await Navigator.pushNamed(context, CreateComplaintScreen.routeName);
+    if (created == true) _load();
   }
 
   @override
@@ -102,7 +88,7 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: () => Navigator.pushNamed(context, CreateComplaintScreen.routeName),
+            onPressed: _openCreate,
             icon: const Icon(Icons.add, color: Colors.white),
             tooltip: 'Buat pengaduan',
           ),
@@ -120,12 +106,33 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
             ),
           ),
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              itemCount: _visible.length,
-              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-              itemBuilder: (context, i) => _ComplaintCard(item: _visible[i]),
-            ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_error!, textAlign: TextAlign.center),
+                              const SizedBox(height: AppSpacing.md),
+                              FilledButton(onPressed: _load, child: const Text('Coba lagi')),
+                            ],
+                          ),
+                        ),
+                      )
+                    : _visible.isEmpty
+                        ? const Center(child: Text('Belum ada pengaduan.'))
+                        : RefreshIndicator(
+                            onRefresh: _load,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.all(AppSpacing.lg),
+                              itemCount: _visible.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+                              itemBuilder: (context, i) => _ComplaintCard(item: _visible[i]),
+                            ),
+                          ),
           ),
         ],
       ),
@@ -186,43 +193,59 @@ class _ComplaintTabs extends StatelessWidget {
 class _ComplaintCard extends StatelessWidget {
   const _ComplaintCard({required this.item});
 
-  final ComplaintItem item;
+  final PengaduanModel item;
 
   Color get _accent {
     switch (item.status) {
-      case ComplaintStatus.diproses:
+      case ComplaintStatusUi.diproses:
         return AppColors.primaryBlue;
-      case ComplaintStatus.diterima:
+      case ComplaintStatusUi.diterima:
+      case ComplaintStatusUi.terkirim:
         return const Color(0xFFE58A00);
-      case ComplaintStatus.selesai:
+      case ComplaintStatusUi.selesai:
         return AppColors.green;
+      case ComplaintStatusUi.ditolak:
+        return const Color(0xFFE53935);
     }
   }
 
   ({Color bg, Color fg}) get _badge {
     switch (item.status) {
-      case ComplaintStatus.diproses:
+      case ComplaintStatusUi.diproses:
         return (bg: const Color(0xFFE8F3FC), fg: AppColors.primaryBlue);
-      case ComplaintStatus.diterima:
+      case ComplaintStatusUi.diterima:
+      case ComplaintStatusUi.terkirim:
         return (bg: const Color(0xFFFFF3D6), fg: const Color(0xFFE58A00));
-      case ComplaintStatus.selesai:
+      case ComplaintStatusUi.selesai:
         return (bg: const Color(0xFFE8F8EB), fg: AppColors.green);
+      case ComplaintStatusUi.ditolak:
+        return (bg: const Color(0xFFFFEBEE), fg: const Color(0xFFE53935));
     }
   }
 
   String get _statusLabel {
     switch (item.status) {
-      case ComplaintStatus.diproses:
+      case ComplaintStatusUi.diproses:
         return 'Diproses';
-      case ComplaintStatus.diterima:
+      case ComplaintStatusUi.diterima:
         return 'Diterima';
-      case ComplaintStatus.selesai:
+      case ComplaintStatusUi.terkirim:
+        return 'Terkirim';
+      case ComplaintStatusUi.selesai:
         return 'Selesai';
+      case ComplaintStatusUi.ditolak:
+        return 'Ditolak';
     }
   }
 
+  String get _dateLabel {
+    final d = item.tanggalDibuat;
+    if (d == null) return '-';
+    return DateFormat('d MMM yyyy', 'id_ID').format(d);
+  }
+
   IconData get _categoryIcon {
-    switch (item.category) {
+    switch (item.topik) {
       case 'Kebersihan':
         return Icons.cleaning_services_outlined;
       case 'Keamanan':
@@ -269,7 +292,7 @@ class _ComplaintCard extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          item.id,
+                          item.nomorPengaduan,
                           style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 12,
@@ -296,7 +319,7 @@ class _ComplaintCard extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      item.title,
+                      item.judul,
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 15,
@@ -306,7 +329,7 @@ class _ComplaintCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      item.description,
+                      item.deskripsi,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -322,7 +345,7 @@ class _ComplaintCard extends StatelessWidget {
                         Icon(_categoryIcon, size: 16, color: AppColors.mutedText),
                         const SizedBox(width: 4),
                         Text(
-                          item.category,
+                          item.topik,
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 12,
@@ -331,7 +354,7 @@ class _ComplaintCard extends StatelessWidget {
                         ),
                         const Spacer(),
                         Text(
-                          item.dateLabel,
+                          _dateLabel,
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 12,

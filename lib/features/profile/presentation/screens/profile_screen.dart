@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../app/main_tab_navigation.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/config/app_config.dart';
+import '../../../../core/services/auth_service.dart';
 import '../../../auth/presentation/screens/change_password_screen.dart';
 import '../../../auth/presentation/screens/login_screen.dart';
+import '../../../home/presentation/screens/home_dashboard_screen.dart';
 import 'help_support_screen.dart';
+import '../../../shared/widgets/parete_logo.dart';
 
 /// Profil warga / kepala keluarga.
 class ProfileScreen extends StatelessWidget {
@@ -66,10 +71,19 @@ class ProfileScreen extends StatelessWidget {
       },
     );
     if (ok == true && context.mounted) {
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        LoginScreen.routeName,
-        (route) => false,
-      );
+      await context.read<AuthService>().logout();
+      if (!context.mounted) return;
+      if (AppConfig.authEnabled) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          LoginScreen.routeName,
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          HomeDashboardScreen.routeName,
+          (route) => false,
+        );
+      }
     }
   }
 
@@ -78,7 +92,7 @@ class ProfileScreen extends StatelessWidget {
       context: context,
       applicationName: 'Parete',
       applicationVersion: 'v1.0.0',
-      applicationIcon: const Icon(Icons.apartment_rounded, size: 40, color: AppColors.primaryBlue),
+      applicationIcon: const PareteLogo(variant: PareteLogoVariant.dark, height: 40),
       children: const [
         Padding(
           padding: EdgeInsets.only(top: 12),
@@ -94,6 +108,10 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const headerBlue = Color(0xFF2E7DBC);
+    final warga = context.watch<AuthService>().warga;
+    final nama = warga?.namaKepalaKeluarga ?? 'Warga';
+    final idKeluarga = warga?.idKeluarga ?? '-';
+    final nomorHp = warga?.nomorHp ?? '-';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
@@ -137,9 +155,9 @@ class ProfileScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    const Text(
-                      'Yulian Adiprana',
-                      style: TextStyle(
+                    Text(
+                      nama,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
                         fontSize: 20,
@@ -196,20 +214,20 @@ class ProfileScreen extends StatelessWidget {
                   _SectionCard(
                     title: 'Informasi Pribadi',
                     children: [
-                      _InfoRow(label: 'Nama Kepala Keluarga', value: 'Yulian Adiprana'),
+                      _InfoRow(label: 'Nama Kepala Keluarga', value: nama),
                       const Divider(height: 1),
-                      _InfoRow(label: 'No. Rumah', value: '87'),
+                      _InfoRow(label: 'No. Rumah', value: warga?.nomorRumah ?? '-'),
                       const Divider(height: 1),
                       _InfoRow(
                         label: 'No. HP',
-                        value: '+62 812 3456 7890',
+                        value: nomorHp,
                         trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFB0B8C9)),
                         onTap: () {},
                       ),
                       const Divider(height: 1),
                       _InfoRow(
                         label: 'ID Keluarga',
-                        value: 'RT05-2026-087',
+                        value: idKeluarga,
                         trailing: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(

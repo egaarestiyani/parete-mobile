@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/services/auth_service.dart';
 import '../../../home/presentation/screens/home_dashboard_screen.dart';
+import '../../../shared/widgets/parete_logo.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../widgets/rounded_text_field.dart';
 
@@ -24,6 +27,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   bool _obscureNew = true;
   bool _obscureConfirm = true;
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -68,6 +72,26 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   bool get _canSubmit => _allRulesMet && _passwordsMatch && _phoneFilled;
 
+  Future<void> _submit() async {
+    if (!_canSubmit || _submitting) return;
+    setState(() => _submitting = true);
+    try {
+      await context.read<AuthService>().changePassword(
+            passwordBaru: _newPasswordController.text,
+            nomorHp: _phoneController.text.trim(),
+          );
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, HomeDashboardScreen.routeName);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final titleStyle = Theme.of(context).textTheme.titleLarge;
@@ -79,21 +103,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           child: Column(
             children: [
               const SizedBox(height: 28),
-              Text.rich(
-                TextSpan(
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 52,
-                    fontWeight: FontWeight.w800,
-                    height: 1.05,
-                  ),
-                  children: [
-                    const TextSpan(text: 'pa'),
-                    TextSpan(text: '•', style: TextStyle(color: AppColors.yellow)),
-                    const TextSpan(text: 'rete'),
-                  ],
-                ),
-                textAlign: TextAlign.center,
+              const Center(
+                child: PareteLogo(variant: PareteLogoVariant.light, height: 52),
               ),
               const SizedBox(height: AppSpacing.xs),
               const Text(
@@ -262,13 +273,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         ),
                         const SizedBox(height: AppSpacing.xxl),
                         PrimaryButton(
-                          label: 'Simpan dan Lanjut',
-                          onPressed: _canSubmit
-                              ? () => Navigator.pushReplacementNamed(
-                                    context,
-                                    HomeDashboardScreen.routeName,
-                                  )
-                              : null,
+                          label: _submitting ? 'Menyimpan...' : 'Simpan dan Lanjut',
+                          onPressed: _canSubmit && !_submitting ? _submit : null,
                           expanded: true,
                         ),
                       ],

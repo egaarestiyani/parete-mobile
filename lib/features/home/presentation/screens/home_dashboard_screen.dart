@@ -6,6 +6,7 @@ import '../../../../app/main_tab_navigation.dart';
 import '../../../complaints/presentation/screens/complaints_list_screen.dart';
 import '../../../documents/presentation/screens/documents_screen.dart';
 import '../../../information/presentation/screens/information_screen.dart';
+import '../../../shared/widgets/parete_logo.dart';
 
 /// Beranda setelah pengguna menyelesaikan ganti kata sandi / data awal.
 class HomeDashboardScreen extends StatefulWidget {
@@ -361,20 +362,7 @@ class _BannerPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text.rich(
-                  TextSpan(
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                    children: [
-                      const TextSpan(text: 'pa'),
-                      TextSpan(text: '•', style: TextStyle(color: AppColors.yellow)),
-                      const TextSpan(text: 'rete'),
-                    ],
-                  ),
-                ),
+                const PareteLogo(variant: PareteLogoVariant.light, height: 22),
                 const SizedBox(height: AppSpacing.sm),
                 const Text(
                   'Kerja Bakti Massal',

@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/main_tab_navigation.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/models/dokumen_model.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/dokumen_service.dart';
 import 'document_submission_screen.dart';
 
 /// Daftar dokumen resmi RT/RW.
@@ -15,83 +20,77 @@ class DocumentsScreen extends StatefulWidget {
   State<DocumentsScreen> createState() => _DocumentsScreenState();
 }
 
-class _DocItem {
-  const _DocItem({
-    required this.title,
-    required this.extLabel,
-    required this.extColor,
-    required this.meta,
-    required this.category,
-  });
-
-  final String title;
-  final String extLabel;
-  final Color extColor;
-  final String meta;
-  final String category; // 'Semua' | 'Surat' | 'Formulir'
-}
-
 class _DocumentsScreenState extends State<DocumentsScreen> {
   static const Color _headerBlue = Color(0xFF2E7DBC);
 
   static const List<String> _filters = ['Semua', 'Surat', 'Formulir'];
 
-  static const List<_DocItem> _allDocs = [
-    _DocItem(
-      title: 'Formulir Surat Keterangan Domisili',
-      extLabel: 'PDF',
-      extColor: Color(0xFFE53935),
-      meta: 'PDF • 245 KB',
-      category: 'Formulir',
-    ),
-    _DocItem(
-      title: 'Surat Pengantar RT — Template',
-      extLabel: 'DOC',
-      extColor: Color(0xFF2B89D6),
-      meta: 'DOC • 128 KB',
-      category: 'Surat',
-    ),
-    _DocItem(
-      title: 'Surat Keterangan Tidak Mampu',
-      extLabel: 'PDF',
-      extColor: Color(0xFFE53935),
-      meta: 'PDF • 312 KB',
-      category: 'Surat',
-    ),
-    _DocItem(
-      title: 'Daftar Warga — Formulir',
-      extLabel: 'XLS',
-      extColor: Color(0xFF33B249),
-      meta: 'XLS • 89 KB',
-      category: 'Formulir',
-    ),
-    _DocItem(
-      title: 'Surat Keterangan Usaha',
-      extLabel: 'PDF',
-      extColor: Color(0xFFE53935),
-      meta: 'PDF • 198 KB',
-      category: 'Surat',
-    ),
-  ];
-
   String _filter = _filters.first;
+  bool _loading = true;
+  String? _error;
+  List<DokumenModel> _docs = [];
+  DokumenStats _stats = const DokumenStats(total: 0, baruBulanIni: 0, totalUnduhan: 0);
 
-  List<_DocItem> get _visibleDocs {
-    if (_filter == 'Semua') return _allDocs;
-    return _allDocs.where((d) => d.category == _filter).toList();
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final api = context.read<AuthService>().api;
+      String? kategori;
+      if (_filter == 'Surat') kategori = 'surat';
+      if (_filter == 'Formulir') kategori = 'formulir';
+      final result = await DokumenService(api).fetch(kategori: kategori);
+      if (!mounted) return;
+      setState(() {
+        _docs = result.docs;
+        _stats = result.stats;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  List<DokumenModel> get _visibleDocs {
+    if (_filter == 'Semua') return _docs;
+    final target = _filter.toLowerCase();
+    return _docs.where((d) => d.kategori == target).toList();
+  }
+
+  Future<void> _downloadDoc(DokumenModel doc) async {
+    final token = await context.read<AuthService>().currentToken();
+    final uri = Uri.parse('${doc.downloadPath}${token != null ? '?token=$token' : ''}');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal membuka unduhan dokumen.')),
+      );
+    }
   }
 
   void _openSubmission() {
     Navigator.pushNamed(context, DocumentSubmissionScreen.routeName);
   }
 
-  void _showDownloadSheet(_DocItem doc) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _DownloadProgressSheet(doc: doc),
-    );
+  Color _extColor(String tipe) {
+    return switch (tipe.toLowerCase()) {
+      'pdf' => const Color(0xFFE53935),
+      'doc' || 'docx' => const Color(0xFF2B89D6),
+      'xls' || 'xlsx' => AppColors.green,
+      _ => AppColors.mutedText,
+    };
   }
 
   @override
@@ -116,239 +115,104 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md + 4),
         child: const MainBottomNavBar(selectedIndex: 3),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 100),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8F3FC),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: const [
-                Expanded(
-                  child: _StatCell(value: '12', label: 'Total Dokumen'),
-                ),
-                Expanded(
-                  child: _StatCell(value: '3', label: 'Baru Bulan Ini'),
-                ),
-                Expanded(
-                  child: _StatCell(value: '5', label: 'Diunduh'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: _filters.map((f) {
-                final selected = f == _filter;
-                return Padding(
-                  padding: const EdgeInsets.only(right: AppSpacing.sm),
-                  child: ChoiceChip(
-                    label: Text(f),
-                    selected: selected,
-                    onSelected: (_) => setState(() => _filter = f),
-                    selectedColor: AppColors.yellow,
-                    backgroundColor: Colors.white,
-                    labelStyle: TextStyle(
-                      color: AppColors.darkBlueText,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: BorderSide(color: selected ? AppColors.yellow : AppColors.border),
-                    ),
-                    showCheckmark: false,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          ..._visibleDocs.map(
-            (d) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: _DocumentTile(
-                item: d,
-                onDownload: () => _showDownloadSheet(d),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-Duration _estimatedDownloadDuration(_DocItem doc) {
-  final match = RegExp(r'(\d+)\s*KB', caseSensitive: false).firstMatch(doc.meta);
-  final kb = match != null ? int.tryParse(match.group(1)!) ?? 256 : 256;
-  // Durasi perkiraan: file lebih besar = unduh lebih lama (demo, ~12–20 ms per KB).
-  final ms = (kb * 16).clamp(1600, 12000);
-  return Duration(milliseconds: ms);
-}
-
-/// Bottom sheet unduh dengan progress bar yang diperbarui setiap frame (real-time).
-class _DownloadProgressSheet extends StatefulWidget {
-  const _DownloadProgressSheet({required this.doc});
-
-  final _DocItem doc;
-
-  @override
-  State<_DownloadProgressSheet> createState() => _DownloadProgressSheetState();
-}
-
-class _DownloadProgressSheetState extends State<_DownloadProgressSheet> with SingleTickerProviderStateMixin {
-  late final AnimationController _progress;
-  bool _cancelled = false;
-  bool _completed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _progress = AnimationController(
-      vsync: this,
-      duration: _estimatedDownloadDuration(widget.doc),
-    )..addListener(() {
-        if (mounted) setState(() {});
-      });
-    _progress.forward().then((_) {
-      if (!mounted || _cancelled) return;
-      setState(() => _completed = true);
-    });
-  }
-
-  @override
-  void dispose() {
-    _progress.dispose();
-    super.dispose();
-  }
-
-  void _onCancel() {
-    _cancelled = true;
-    _progress.stop();
-    Navigator.of(context).pop();
-  }
-
-  double get _value => _progress.value.clamp(0.0, 1.0);
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final pct = (_value * 100).round().clamp(0, 100);
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        child: Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(2),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: AppSpacing.md),
+                        FilledButton(onPressed: _load, child: const Text('Coba lagi')),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  widget.doc.title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                    color: AppColors.darkBlueText,
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _completed ? 'Unduhan selesai.' : 'Mengunduh dokumen…',
-                        style: TextStyle(
-                          color: _completed ? AppColors.green : AppColors.mutedText,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
+                )
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 100),
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F3FC),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _StatCell(value: '${_stats.total}', label: 'Total Dokumen'),
+                            ),
+                            Expanded(
+                              child: _StatCell(value: '${_stats.baruBulanIni}', label: 'Baru Bulan Ini'),
+                            ),
+                            Expanded(
+                              child: _StatCell(value: '${_stats.totalUnduhan}', label: 'Diunduh'),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                    Text(
-                      '$pct%',
-                      style: const TextStyle(
-                        color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                        fontFeatures: [FontFeature.tabularFigures()],
+                      const SizedBox(height: AppSpacing.md),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: _filters.map((f) {
+                            final selected = f == _filter;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: AppSpacing.sm),
+                              child: ChoiceChip(
+                                label: Text(f),
+                                selected: selected,
+                                onSelected: (_) {
+                                  setState(() => _filter = f);
+                                  _load();
+                                },
+                                selectedColor: AppColors.yellow,
+                                backgroundColor: Colors.white,
+                                labelStyle: const TextStyle(
+                                  color: AppColors.darkBlueText,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                  side: BorderSide(
+                                    color: selected ? AppColors.yellow : AppColors.border,
+                                  ),
+                                ),
+                                showCheckmark: false,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                              ),
+                            );
+                          }).toList(),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    value: _completed ? 1 : _value,
-                    minHeight: 8,
-                    backgroundColor: const Color(0xFFE8F3FC),
-                    color: AppColors.primaryBlue,
+                      const SizedBox(height: AppSpacing.md),
+                      if (_visibleDocs.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 32),
+                          child: Center(child: Text('Belum ada dokumen.')),
+                        )
+                      else
+                        ..._visibleDocs.map(
+                          (d) => Padding(
+                            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                            child: _DocumentTile(
+                              title: d.nama,
+                              extLabel: d.tipe.toUpperCase(),
+                              extColor: _extColor(d.tipe),
+                              meta: '${d.tipe.toUpperCase()} • ${d.ukuranLabel}',
+                              onDownload: () => _downloadDoc(d),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                OutlinedButton(
-                  onPressed: _completed
-                      ? () {
-                          final messenger = ScaffoldMessenger.maybeOf(context);
-                          Navigator.of(context).pop();
-                          messenger?.showSnackBar(
-                            const SnackBar(content: Text('Dokumen siap dibuka (demo).')),
-                          );
-                        }
-                      : null,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primaryBlue,
-                    side: const BorderSide(color: AppColors.primaryBlue),
-                    disabledForegroundColor: AppColors.mutedText,
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: const Text('Buka Setelah Diunduh', style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                FilledButton(
-                  onPressed: _onCancel,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFEBEE),
-                    foregroundColor: const Color(0xFFE53935),
-                    elevation: 0,
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Text(
-                    _completed ? 'Tutup' : 'Batal',
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -388,9 +252,18 @@ class _StatCell extends StatelessWidget {
 }
 
 class _DocumentTile extends StatelessWidget {
-  const _DocumentTile({required this.item, required this.onDownload});
+  const _DocumentTile({
+    required this.title,
+    required this.extLabel,
+    required this.extColor,
+    required this.meta,
+    required this.onDownload,
+  });
 
-  final _DocItem item;
+  final String title;
+  final String extLabel;
+  final Color extColor;
+  final String meta;
   final VoidCallback onDownload;
 
   @override
@@ -412,13 +285,13 @@ class _DocumentTile extends StatelessWidget {
                 height: 44,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: item.extColor.withValues(alpha: 0.12),
+                  color: extColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  item.extLabel,
+                  extLabel,
                   style: TextStyle(
-                    color: item.extColor,
+                    color: extColor,
                     fontWeight: FontWeight.w900,
                     fontSize: 11,
                   ),
@@ -430,7 +303,7 @@ class _DocumentTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.title,
+                      title,
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 14,
@@ -440,7 +313,7 @@ class _DocumentTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      item.meta,
+                      meta,
                       style: const TextStyle(
                         color: AppColors.mutedText,
                         fontWeight: FontWeight.w600,

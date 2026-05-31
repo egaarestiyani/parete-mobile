@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../../home/presentation/screens/home_dashboard_screen.dart';
+import '../../../shared/widgets/parete_logo.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../presentation/widgets/rounded_text_field.dart';
 import 'change_password_screen.dart';
@@ -24,6 +28,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _familyIdController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _submitting = false;
 
   bool get _idRegistered {
     final t = _familyIdController.text.trim();
@@ -38,6 +43,31 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _onFieldsChanged() => setState(() {});
+
+  Future<void> _submitLogin() async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
+    try {
+      final auth = context.read<AuthService>();
+      final warga = await auth.login(
+        idKeluarga: _familyIdController.text,
+        password: _passwordController.text,
+      );
+      if (!mounted) return;
+      if (warga.harusGantiPassword) {
+        Navigator.pushReplacementNamed(context, ChangePasswordScreen.routeName);
+      } else {
+        Navigator.pushReplacementNamed(context, HomeDashboardScreen.routeName);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -59,21 +89,8 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             children: [
               const SizedBox(height: 28),
-              Text.rich(
-                TextSpan(
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 52,
-                    fontWeight: FontWeight.w800,
-                    height: 1.05,
-                  ),
-                  children: [
-                    const TextSpan(text: 'pa'),
-                    TextSpan(text: '•', style: TextStyle(color: AppColors.yellow)),
-                    const TextSpan(text: 'rete'),
-                  ],
-                ),
-                textAlign: TextAlign.center,
+              const Center(
+                child: PareteLogo(variant: PareteLogoVariant.light, height: 52),
               ),
               const SizedBox(height: AppSpacing.xs),
               const Text(
@@ -184,8 +201,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: AppSpacing.xl),
                         PrimaryButton(
-                          label: 'Masuk',
-                          onPressed: () => Navigator.pushNamed(context, ChangePasswordScreen.routeName),
+                          label: _submitting ? 'Memproses...' : 'Masuk',
+                          onPressed: _submitting ? null : _submitLogin,
                           expanded: true,
                         ),
                         const SizedBox(height: AppSpacing.md),

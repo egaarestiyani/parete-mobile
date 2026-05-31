@@ -1,8 +1,11 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/permohonan_service.dart';
 
 /// Form pengajuan permohonan dokumen resmi.
 class DocumentSubmissionScreen extends StatefulWidget {
@@ -96,19 +99,43 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
     }
   }
 
-  void _submit() {
-    if (!_canSubmit) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Lengkapi jenis dokumen dan keperluan dokumen terlebih dahulu.'),
-        ),
-      );
+  bool _submitting = false;
+
+  Future<void> _submit() async {
+    if (!_canSubmit || _submitting) {
+      if (!_canSubmit) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Lengkapi jenis dokumen dan keperluan dokumen terlebih dahulu.'),
+          ),
+        );
+      }
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Pengajuan dokumen berhasil dikirim (demo).')),
-    );
-    Navigator.of(context).pop();
+    setState(() => _submitting = true);
+    try {
+      final api = context.read<AuthService>().api;
+      await PermohonanService(api).submit(
+        jenisDokumen: _selectedType,
+        jenisLainnya: _selectedType == 'Lainnya' ? _otherTypeController.text.trim() : null,
+        keperluan: _purposeController.text.trim(),
+        catatan: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+        berkasDiisi: _filledTemplateFile,
+        dokumenPendukung: _supportingFile,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pengajuan dokumen berhasil dikirim ke Admin RT.')),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   InputDecoration _fieldDecoration({String? hint, String? helper}) {

@@ -1,24 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../app/main_tab_navigation.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
-
-enum _InfoKind { kegiatan, pengumuman }
-
-class _InfoItem {
-  const _InfoItem({
-    required this.kind,
-    required this.title,
-    required this.description,
-    required this.dateLabel,
-  });
-
-  final _InfoKind kind;
-  final String title;
-  final String description;
-  final String dateLabel;
-}
+import '../../../../core/models/informasi_model.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/informasi_service.dart';
 
 /// Pengumuman & kegiatan warga.
 class InformationScreen extends StatefulWidget {
@@ -35,46 +24,44 @@ class _InformationScreenState extends State<InformationScreen> {
 
   static const List<String> _filters = ['Semua', 'Pengumuman', 'Kegiatan'];
   int _filterIndex = 0;
+  bool _loading = true;
+  String? _error;
+  List<InformasiModel> _all = [];
 
-  static const List<_InfoItem> _all = [
-    _InfoItem(
-      kind: _InfoKind.kegiatan,
-      title: 'Kerja Bakti Massal',
-      description: 'Warga dihimbau hadir pada 5 Maret 2026 pukul 07.00 di area RT 05.',
-      dateLabel: '5 Mar 2026',
-    ),
-    _InfoItem(
-      kind: _InfoKind.pengumuman,
-      title: 'Waspada Demam Berdarah',
-      description: 'Himbauan pencegahan DBD: kosongkan bak mandi, gunakan obat nyamuk, dan segera ke puskesmas jika demam.',
-      dateLabel: '3 Mar 2026',
-    ),
-    _InfoItem(
-      kind: _InfoKind.pengumuman,
-      title: 'Pemutihan PBB Dini Hari',
-      description: 'Informasi jadwal pemutihan pajak untuk warga yang belum melunasi tahun berjalan.',
-      dateLabel: '28 Feb 2026',
-    ),
-    _InfoItem(
-      kind: _InfoKind.kegiatan,
-      title: 'Senam Sehat Lansia',
-      description: 'Setiap Sabtu pukul 08.00 di balai RT. Peserta membawa matras sendiri.',
-      dateLabel: '20 Feb 2026',
-    ),
-    _InfoItem(
-      kind: _InfoKind.pengumuman,
-      title: 'Distribusi Air Bersih',
-      description: 'Truk tangki tersedia di pos RT pada 12 Mar 2026 pukul 09.00–11.00.',
-      dateLabel: '18 Feb 2026',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
-  List<_InfoItem> get _visible {
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final api = context.read<AuthService>().api;
+      final items = await InformasiService(api).fetch();
+      if (!mounted) return;
+      setState(() {
+        _all = items;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  List<InformasiModel> get _visible {
     switch (_filterIndex) {
       case 1:
-        return _all.where((e) => e.kind == _InfoKind.pengumuman).toList();
+        return _all.where((e) => e.jenis == InformasiJenis.pengumuman).toList();
       case 2:
-        return _all.where((e) => e.kind == _InfoKind.kegiatan).toList();
+        return _all.where((e) => e.jenis == InformasiJenis.kegiatan).toList();
       default:
         return _all;
     }
@@ -142,12 +129,38 @@ class _InformationScreenState extends State<InformationScreen> {
             ),
           ),
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 100),
-              itemCount: _visible.length,
-              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-              itemBuilder: (context, i) => _InfoCard(item: _visible[i]),
-            ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_error!, textAlign: TextAlign.center),
+                              const SizedBox(height: AppSpacing.md),
+                              FilledButton(onPressed: _load, child: const Text('Coba lagi')),
+                            ],
+                          ),
+                        ),
+                      )
+                    : _visible.isEmpty
+                        ? const Center(child: Text('Belum ada informasi.'))
+                        : RefreshIndicator(
+                            onRefresh: _load,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(
+                                AppSpacing.lg,
+                                AppSpacing.md,
+                                AppSpacing.lg,
+                                100,
+                              ),
+                              itemCount: _visible.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+                              itemBuilder: (context, i) => _InfoCard(item: _visible[i]),
+                            ),
+                          ),
           ),
         ],
       ),
@@ -162,13 +175,20 @@ class _InformationScreenState extends State<InformationScreen> {
 class _InfoCard extends StatelessWidget {
   const _InfoCard({required this.item});
 
-  final _InfoItem item;
+  final InformasiModel item;
 
   Color get _accent {
-    return item.kind == _InfoKind.kegiatan ? const Color(0xFFE53935) : AppColors.primaryBlue;
+    return item.jenis == InformasiJenis.kegiatan ? const Color(0xFFE53935) : AppColors.primaryBlue;
   }
 
-  String get _categoryLabel => item.kind == _InfoKind.kegiatan ? 'KEGIATAN' : 'PENGUMUMAN';
+  String get _categoryLabel =>
+      item.jenis == InformasiJenis.kegiatan ? 'KEGIATAN' : 'PENGUMUMAN';
+
+  String get _dateLabel {
+    final d = item.tanggalPublikasi;
+    if (d == null) return '-';
+    return DateFormat('d MMM yyyy', 'id_ID').format(d);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -206,7 +226,7 @@ class _InfoCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        item.title,
+                        item.judul,
                         style: const TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 15,
@@ -216,7 +236,7 @@ class _InfoCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        item.description,
+                        item.isi,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -228,7 +248,7 @@ class _InfoCard extends StatelessWidget {
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
-                        item.dateLabel,
+                        _dateLabel,
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 12,

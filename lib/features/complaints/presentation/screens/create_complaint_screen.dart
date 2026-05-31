@@ -1,8 +1,11 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/pengaduan_service.dart';
 
 class CreateComplaintScreen extends StatefulWidget {
   const CreateComplaintScreen({super.key});
@@ -33,6 +36,7 @@ class _CreateComplaintScreenState extends State<CreateComplaintScreen> {
   final TextEditingController _locationController = TextEditingController();
 
   final List<PlatformFile> _attachments = [];
+  bool _submitting = false;
 
   static const int _maxDesc = 500;
 
@@ -55,6 +59,40 @@ class _CreateComplaintScreenState extends State<CreateComplaintScreen> {
     _descController.dispose();
     _locationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submitComplaint() async {
+    if (_titleController.text.trim().isEmpty ||
+        _descController.text.trim().isEmpty ||
+        _locationController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lengkapi judul, deskripsi, dan lokasi pengaduan.')),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      final api = context.read<AuthService>().api;
+      await PengaduanService(api).create(
+        topik: _topic,
+        judul: _titleController.text.trim(),
+        deskripsi: _descController.text.trim(),
+        lokasi: _locationController.text.trim(),
+        attachments: _attachments,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pengaduan berhasil dikirim ke Admin RT.')),
+      );
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   Future<void> _requestExit(BuildContext context) async {
@@ -443,14 +481,17 @@ class _CreateComplaintScreenState extends State<CreateComplaintScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.sm),
               child: FilledButton.icon(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: _submitting ? null : _submitComplaint,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primaryBlue,
                   minimumSize: const Size(double.infinity, 52),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                 ),
                 icon: const Icon(Icons.send_rounded, size: 20),
-                label: const Text('Kirim', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                label: Text(
+                  _submitting ? 'Mengirim...' : 'Kirim',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
               ),
             ),
             Container(

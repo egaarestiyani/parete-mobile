@@ -19,12 +19,13 @@ class OnboardingProgressIndicator extends StatelessWidget {
       children: List.generate(itemCount, (index) {
         final bool active = index == currentIndex;
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          width: active ? 26 : 10,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOutCubic,
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          width: active ? 28 : 8,
           height: 8,
           decoration: BoxDecoration(
-            color: active ? AppColors.yellow : const Color(0xFFD8D9DD),
+            color: active ? AppColors.yellow : const Color(0xFFD0D4DC),
             borderRadius: BorderRadius.circular(100),
           ),
         );

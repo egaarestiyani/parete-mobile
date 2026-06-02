@@ -52,6 +52,22 @@ class ApiClient {
     return _dio.post<T>(path, data: data, options: _withAuth(options));
   }
 
+  Future<Response<T>> put<T>(
+    String path, {
+    Object? data,
+    Options? options,
+  }) {
+    return _dio.put<T>(path, data: data, options: _withAuth(options));
+  }
+
+  Future<Response<T>> patch<T>(
+    String path, {
+    Object? data,
+    Options? options,
+  }) {
+    return _dio.patch<T>(path, data: data, options: _withAuth(options));
+  }
+
   Future<Response<List<int>>> download(
     String path, {
     Map<String, dynamic>? queryParameters,

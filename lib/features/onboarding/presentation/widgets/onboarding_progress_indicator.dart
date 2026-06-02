@@ -25,7 +25,7 @@ class OnboardingProgressIndicator extends StatelessWidget {
           width: active ? 28 : 8,
           height: 8,
           decoration: BoxDecoration(
-            color: active ? AppColors.yellow : const Color(0xFFD0D4DC),
+            color: active ? AppColors.yellow : AppColors.progressInactive,
             borderRadius: BorderRadius.circular(100),
           ),
         );

@@ -28,4 +28,17 @@ class InformasiService {
       throw Exception(_api.messageFromError(e));
     }
   }
+
+  Future<InformasiModel> fetchById(String id) async {
+    try {
+      final res = await _api.get<Map<String, dynamic>>('/informasi/$id');
+      final raw = res.data?['data'] ?? res.data?['informasi'] ?? res.data;
+      if (raw is! Map<String, dynamic>) {
+        throw Exception('Data informasi tidak valid.');
+      }
+      return InformasiModel.fromJson(raw);
+    } on DioException catch (e) {
+      throw Exception(_api.messageFromError(e));
+    }
+  }
 }

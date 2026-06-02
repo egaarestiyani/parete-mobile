@@ -46,16 +46,7 @@ class DashboardService {
         informasi: infoList is List
             ? infoList
                 .whereType<Map<String, dynamic>>()
-                .map((e) => InformasiModel(
-                      id: e['id']?.toString() ?? '',
-                      jenis: e['jenis_informasi']?.toString() == 'kegiatan'
-                          ? InformasiJenis.kegiatan
-                          : InformasiJenis.pengumuman,
-                      judul: e['judul_informasi']?.toString() ?? '',
-                      isi: e['isi_informasi']?.toString() ?? '',
-                      tanggalPublikasi:
-                          DateTime.tryParse(e['tanggal_publikasi']?.toString() ?? ''),
-                    ))
+                .map(InformasiModel.fromJson)
                 .toList()
             : <InformasiModel>[],
         pengaduan: pengaduanList is List

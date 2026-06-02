@@ -4,19 +4,111 @@ import 'package:provider/provider.dart';
 import '../../../../app/main_tab_navigation.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
-import '../../../../core/config/app_config.dart';
+import '../../../../core/models/pengaduan_model.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/pengaduan_service.dart';
+import '../../../../core/utils/phone_number.dart';
+import '../../../../core/utils/warga_display.dart';
+import '../../../shared/widgets/parete_phone_field.dart';
 import '../../../auth/presentation/screens/change_password_screen.dart';
 import '../../../auth/presentation/screens/login_screen.dart';
-import '../../../home/presentation/screens/home_dashboard_screen.dart';
 import 'help_support_screen.dart';
 import '../../../shared/widgets/parete_logo.dart';
+import '../../../shared/widgets/parete_page_header.dart';
 
 /// Profil warga / kepala keluarga.
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   static const String routeName = '/profile';
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _loadingStats = true;
+  int _totalPengaduan = 0;
+  int _pengaduanAktif = 0;
+  int _pengaduanSelesai = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await context.read<AuthService>().refreshWarga();
+    await _loadPengaduanStats();
+  }
+
+  Future<void> _editNomorHp() async {
+    final auth = context.read<AuthService>();
+    final controller = TextEditingController(
+      text: PhoneNumberUtil.localPartFromStored(auth.warga?.nomorHp),
+    );
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ubah Nomor HP'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Nomor akan disimpan format +62 dan tampil sama di web admin.',
+                style: TextStyle(fontSize: 12, color: AppColors.mutedText, height: 1.35),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              ParetePhoneField(
+                controller: controller,
+                hint: '81291497170',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Simpan')),
+        ],
+      ),
+    );
+    if (saved != true || !mounted) return;
+    try {
+      await auth.updateNomorHp(controller.text);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nomor HP diperbarui dan tersimpan di data RT.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+    controller.dispose();
+  }
+
+  Future<void> _loadPengaduanStats() async {
+    setState(() => _loadingStats = true);
+    try {
+      final api = context.read<AuthService>().api;
+      final all = await PengaduanService(api).fetch();
+      if (!mounted) return;
+      final stats = PengaduanStats.fromList(all);
+      setState(() {
+        _totalPengaduan = stats.total;
+        _pengaduanAktif = stats.aktif;
+        _pengaduanSelesai = stats.selesai;
+        _loadingStats = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingStats = false);
+    }
+  }
 
   Future<void> _confirmLogout(BuildContext context) async {
     final ok = await showDialog<bool>(
@@ -73,17 +165,10 @@ class ProfileScreen extends StatelessWidget {
     if (ok == true && context.mounted) {
       await context.read<AuthService>().logout();
       if (!context.mounted) return;
-      if (AppConfig.authEnabled) {
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          LoginScreen.routeName,
-          (route) => false,
-        );
-      } else {
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          HomeDashboardScreen.routeName,
-          (route) => false,
-        );
-      }
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        LoginScreen.routeName,
+        (route) => false,
+      );
     }
   }
 
@@ -107,78 +192,76 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const headerBlue = Color(0xFF2E7DBC);
     final warga = context.watch<AuthService>().warga;
     final nama = warga?.namaKepalaKeluarga ?? 'Warga';
     final idKeluarga = warga?.idKeluarga ?? '-';
-    final nomorHp = warga?.nomorHp ?? '-';
+    final nomorHp = PhoneNumberUtil.formatDisplay(warga?.nomorHp);
+    final rtLabel = WargaDisplay.rtLabel(idKeluarga);
+    final noRumahLabel = WargaDisplay.nomorRumahLabel(warga?.nomorRumah ?? '-');
+    final statusAkun = warga?.statusAkun ?? 'Aktif';
+    final statusAktif = statusAkun.toLowerCase() == 'aktif';
+    final alamat = warga?.alamatLengkap ?? '';
+    final alamatLabel = alamat.isEmpty ? '-' : alamat;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: AppColors.screenBackground,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              color: headerBlue,
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 8, AppSpacing.lg, 28),
-                child: Column(
+          PareteProfilePageHeader(
+            child: Column(
+              children: [
+                Stack(
+                  alignment: Alignment.bottomRight,
                   children: [
-                    Stack(
-                      alignment: Alignment.bottomRight,
-                      children: [
-                        CircleAvatar(
-                          radius: 44,
-                          backgroundColor: Colors.white.withValues(alpha: 0.95),
-                          child: const Icon(Icons.person_rounded, size: 48, color: AppColors.primaryBlue),
-                        ),
-                        Positioned(
-                          child: Material(
-                            color: AppColors.yellow,
-                            shape: const CircleBorder(),
-                            child: InkWell(
-                              customBorder: const CircleBorder(),
-                              onTap: () {},
-                              child: const Padding(
-                                padding: EdgeInsets.all(6),
-                                child: Icon(Icons.camera_alt_rounded, size: 16, color: AppColors.darkBlueText),
-                              ),
-                            ),
+                    CircleAvatar(
+                      radius: 44,
+                      backgroundColor: Colors.white.withValues(alpha: 0.95),
+                      child: const Icon(Icons.person_rounded, size: 48, color: AppColors.primaryBlue),
+                    ),
+                    Positioned(
+                      child: Material(
+                        color: AppColors.yellow,
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () {},
+                          child: const Padding(
+                            padding: EdgeInsets.all(6),
+                            child: Icon(Icons.camera_alt_rounded, size: 16, color: AppColors.darkBlueText),
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      nama,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 20,
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _BadgeChip(label: 'RT. 05'),
-                        const SizedBox(width: 8),
-                        _BadgeChip(label: 'No. 87'),
-                      ],
                     ),
                   ],
                 ),
-              ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  nama,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 20,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _BadgeChip(label: rtLabel),
+                    const SizedBox(width: 8),
+                    _BadgeChip(label: noRumahLabel),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
             ),
           ),
           Expanded(
-            child: SingleChildScrollView(
+            child: RefreshIndicator(
+              onRefresh: _bootstrap,
+              child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 100),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -196,16 +279,28 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
                         Expanded(
-                          child: _StatMini(value: '5', label: 'Pengaduan', valueColor: AppColors.primaryBlue),
+                          child: _StatMini(
+                            value: _loadingStats ? '…' : '$_totalPengaduan',
+                            label: 'Pengaduan',
+                            valueColor: AppColors.primaryBlue,
+                          ),
                         ),
                         Expanded(
-                          child: _StatMini(value: '3', label: 'Selesai', valueColor: AppColors.green),
+                          child: _StatMini(
+                            value: _loadingStats ? '…' : '$_pengaduanSelesai',
+                            label: 'Selesai',
+                            valueColor: AppColors.green,
+                          ),
                         ),
                         Expanded(
-                          child: _StatMini(value: '2', label: 'Aktif', valueColor: Color(0xFFE58A00)),
+                          child: _StatMini(
+                            value: _loadingStats ? '…' : '$_pengaduanAktif',
+                            label: 'Aktif',
+                            valueColor: const Color(0xFFE58A00),
+                          ),
                         ),
                       ],
                     ),
@@ -222,8 +317,10 @@ class ProfileScreen extends StatelessWidget {
                         label: 'No. HP',
                         value: nomorHp,
                         trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFB0B8C9)),
-                        onTap: () {},
+                        onTap: _editNomorHp,
                       ),
+                      const Divider(height: 1),
+                      _InfoRow(label: 'Alamat', value: alamatLabel),
                       const Divider(height: 1),
                       _InfoRow(
                         label: 'ID Keluarga',
@@ -234,10 +331,10 @@ class ProfileScreen extends StatelessWidget {
                             color: const Color(0xFFE8F8EC),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
-                            'Aktif',
+                          child: Text(
+                            statusAkun,
                             style: TextStyle(
-                              color: AppColors.green,
+                              color: statusAktif ? AppColors.green : AppColors.mutedText,
                               fontWeight: FontWeight.w800,
                               fontSize: 11,
                             ),
@@ -259,7 +356,7 @@ class ProfileScreen extends StatelessWidget {
                       _SettingsTile(
                         icon: Icons.notifications_none_rounded,
                         title: 'Notifikasi',
-                        subtitle: 'Aktif',
+                        subtitle: statusAkun,
                         onTap: () {},
                       ),
                       const Divider(height: 1),
@@ -296,12 +393,18 @@ class ProfileScreen extends StatelessWidget {
                 ],
               ),
             ),
+            ),
           ),
         ],
       ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md + 4),
-        child: const MainBottomNavBar(selectedIndex: 4),
+        child: MainBottomNavBar(
+          selectedIndex: 4,
+          onWillNavigate: (index) {
+            if (index == 4) _loadPengaduanStats();
+          },
+        ),
       ),
     );
   }

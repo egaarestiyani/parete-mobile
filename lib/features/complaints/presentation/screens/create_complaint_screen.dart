@@ -4,11 +4,14 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/models/pengaduan_model.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/pengaduan_service.dart';
 
 class CreateComplaintScreen extends StatefulWidget {
-  const CreateComplaintScreen({super.key});
+  const CreateComplaintScreen({super.key, this.edit});
+
+  final PengaduanModel? edit;
 
   static const String routeName = '/complaints/create';
 
@@ -47,10 +50,21 @@ class _CreateComplaintScreenState extends State<CreateComplaintScreen> {
       _locationController.text.trim().isNotEmpty ||
       _attachments.isNotEmpty;
 
+  bool get _isEdit => widget.edit != null;
+
   @override
   void initState() {
     super.initState();
     _descController.addListener(() => setState(() {}));
+    final e = widget.edit;
+    if (e != null) {
+      if (_topics.contains(e.topik)) {
+        _topic = e.topik;
+      }
+      _titleController.text = e.judul;
+      _descController.text = e.deskripsi;
+      _locationController.text = e.lokasi;
+    }
   }
 
   @override
@@ -73,16 +87,35 @@ class _CreateComplaintScreenState extends State<CreateComplaintScreen> {
     setState(() => _submitting = true);
     try {
       final api = context.read<AuthService>().api;
-      await PengaduanService(api).create(
-        topik: _topic,
-        judul: _titleController.text.trim(),
-        deskripsi: _descController.text.trim(),
-        lokasi: _locationController.text.trim(),
-        attachments: _attachments,
-      );
+      final service = PengaduanService(api);
+      if (_isEdit) {
+        await service.update(
+          id: widget.edit!.id,
+          topik: _topic,
+          judul: _titleController.text.trim(),
+          deskripsi: _descController.text.trim(),
+          lokasi: _locationController.text.trim(),
+          attachments: _attachments,
+          gantiLampiran: _attachments.isNotEmpty,
+        );
+      } else {
+        await service.create(
+          topik: _topic,
+          judul: _titleController.text.trim(),
+          deskripsi: _descController.text.trim(),
+          lokasi: _locationController.text.trim(),
+          attachments: _attachments,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pengaduan berhasil dikirim ke Admin RT.')),
+        SnackBar(
+          content: Text(
+            _isEdit
+                ? 'Pengaduan berhasil diperbarui.'
+                : 'Pengaduan berhasil dikirim ke Admin RT.',
+          ),
+        ),
       );
       Navigator.of(context).pop(true);
     } catch (e) {
@@ -313,9 +346,9 @@ class _CreateComplaintScreenState extends State<CreateComplaintScreen> {
           backgroundColor: Colors.white,
           foregroundColor: AppColors.darkBlueText,
           centerTitle: true,
-          title: const Text(
-            'Buat Pengaduan',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+          title: Text(
+            _isEdit ? 'Ubah Pengaduan' : 'Buat Pengaduan',
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
           ),
           leading: IconButton(
             onPressed: () => _requestExit(context),

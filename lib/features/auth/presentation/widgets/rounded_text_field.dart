@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class RoundedTextField extends StatelessWidget {
   const RoundedTextField({
@@ -11,6 +12,8 @@ class RoundedTextField extends StatelessWidget {
     this.focusNode,
     this.readOnly = false,
     this.keyboardType,
+    this.textCapitalization = TextCapitalization.none,
+    this.inputFormatters,
     this.prefix,
     super.key,
   });
@@ -24,6 +27,8 @@ class RoundedTextField extends StatelessWidget {
   final FocusNode? focusNode;
   final bool readOnly;
   final TextInputType? keyboardType;
+  final TextCapitalization textCapitalization;
+  final List<TextInputFormatter>? inputFormatters;
   /// When set, replaces [prefixIcon] (e.g. flag + dial code row).
   final Widget? prefix;
 
@@ -38,6 +43,8 @@ class RoundedTextField extends StatelessWidget {
       focusNode: focusNode,
       readOnly: readOnly,
       keyboardType: keyboardType,
+      textCapitalization: textCapitalization,
+      inputFormatters: inputFormatters,
       obscureText: obscureText,
       decoration: InputDecoration(
         hintText: hint,

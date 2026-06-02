@@ -29,10 +29,28 @@ class DokumenService {
     }
   }
 
+  /// Unduh lewat API (mencatat statistik warga di MongoDB).
+  Future<List<int>> downloadById(String dokumenId) async {
+    try {
+      final res = await _api.download('/dokumen/$dokumenId/unduh');
+      return res.data ?? [];
+    } on DioException catch (e) {
+      throw Exception(_api.messageFromError(e));
+    }
+  }
+
+  @Deprecated('Gunakan downloadById agar unduhan tercatat')
   Future<List<int>> downloadBytes(String downloadPath) async {
     final uri = Uri.parse(downloadPath);
-    final path = uri.path.replaceFirst(ApiConfig.baseUrl, '');
-    final apiPath = path.startsWith('/api') ? path.substring(4) : path;
+    var path = uri.path;
+    if (path.startsWith('http')) {
+      final apiBase = Uri.parse(ApiConfig.apiBase);
+      final idx = path.indexOf(apiBase.path);
+      if (idx >= 0) {
+        path = path.substring(idx + apiBase.path.length);
+      }
+    }
+    final apiPath = path.startsWith('/') ? path : '/$path';
     try {
       final res = await _api.download(apiPath);
       return res.data ?? [];

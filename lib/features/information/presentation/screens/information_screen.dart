@@ -6,8 +6,11 @@ import '../../../../app/main_tab_navigation.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/models/informasi_model.dart';
+import '../../../../core/utils/api_date.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/informasi_service.dart';
+import '../../../shared/widgets/parete_page_header.dart';
+import 'informasi_detail_screen.dart';
 
 /// Pengumuman & kegiatan warga.
 class InformationScreen extends StatefulWidget {
@@ -20,8 +23,6 @@ class InformationScreen extends StatefulWidget {
 }
 
 class _InformationScreenState extends State<InformationScreen> {
-  static const Color _headerBlue = Color(0xFF2E7DBC);
-
   static const List<String> _filters = ['Semua', 'Pengumuman', 'Kegiatan'];
   int _filterIndex = 0;
   bool _loading = true;
@@ -70,63 +71,15 @@ class _InformationScreenState extends State<InformationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: AppColors.screenBackground,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: double.infinity,
-            color: _headerBlue,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 8, AppSpacing.lg, AppSpacing.md),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Informasi',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        for (var i = 0; i < _filters.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 8),
-                          Expanded(
-                            child: Material(
-                              color: i == _filterIndex
-                                  ? AppColors.yellow
-                                  : Colors.white.withValues(alpha: 0.22),
-                              borderRadius: BorderRadius.circular(20),
-                              child: InkWell(
-                                onTap: () => setState(() => _filterIndex = i),
-                                borderRadius: BorderRadius.circular(20),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  child: Text(
-                                    _filters[i],
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12,
-                                      color: i == _filterIndex ? AppColors.darkBlueText : Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          PareteTabbedPageHeader(
+            title: 'Informasi',
+            tabLabels: _filters,
+            tabIndex: _filterIndex,
+            onTabChanged: (i) => setState(() => _filterIndex = i),
           ),
           Expanded(
             child: _loading
@@ -187,7 +140,7 @@ class _InfoCard extends StatelessWidget {
   String get _dateLabel {
     final d = item.tanggalPublikasi;
     if (d == null) return '-';
-    return DateFormat('d MMM yyyy', 'id_ID').format(d);
+    return ApiDate.formatDate(d);
   }
 
   @override
@@ -196,7 +149,13 @@ class _InfoCard extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        onTap: () {},
+        onTap: () {
+          Navigator.pushNamed(
+            context,
+            InformasiDetailScreen.routeName,
+            arguments: item,
+          );
+        },
         borderRadius: BorderRadius.circular(14),
         child: IntrinsicHeight(
           child: Row(

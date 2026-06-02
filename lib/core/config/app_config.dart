@@ -2,6 +2,7 @@
 class AppConfig {
   const AppConfig._();
 
-  /// Set `false` untuk melewati login & ganti password (mode development).
-  static const bool authEnabled = false;
+  /// Set `true` untuk login API sungguhan. `false` = halaman login tetap ada,
+  /// tombol Masuk bisa diklik tanpa mengisi ID/password (akun demo).
+  static const bool authEnabled = true;
 }

@@ -92,7 +92,7 @@ class MainBottomNavBar extends StatelessWidget {
                 child: Icon(
                   items[i],
                   size: 26,
-                  color: selected ? AppColors.primaryBlue : const Color(0xFF9AA3B5),
+                  color: selected ? AppColors.primaryBlue : AppColors.mutedText,
                 ),
               ),
             );

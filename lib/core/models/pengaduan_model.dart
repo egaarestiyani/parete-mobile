@@ -1,4 +1,6 @@
-enum ComplaintStatusUi { terkirim, diterima, diproses, selesai, ditolak }
+import '../utils/api_date.dart';
+
+enum ComplaintStatusUi { terkirim, diterima, diproses, selesai, ditolak, dibatalkan }
 
 class PengaduanModel {
   const PengaduanModel({
@@ -12,6 +14,8 @@ class PengaduanModel {
     required this.tanggalDibuat,
     this.catatanSelesai,
     this.alasanDitolak,
+    this.canEdit = false,
+    this.canBatalkan = false,
   });
 
   final String id;
@@ -24,6 +28,8 @@ class PengaduanModel {
   final DateTime? tanggalDibuat;
   final String? catatanSelesai;
   final String? alasanDitolak;
+  final bool canEdit;
+  final bool canBatalkan;
 
   bool get isActive =>
       status == ComplaintStatusUi.terkirim ||
@@ -39,9 +45,11 @@ class PengaduanModel {
       lokasi: json['lokasi_kejadian']?.toString() ?? '',
       deskripsi: json['deskripsi']?.toString() ?? '',
       status: _mapStatus(json['status_pengaduan']?.toString() ?? ''),
-      tanggalDibuat: DateTime.tryParse(json['tanggal_dibuat']?.toString() ?? ''),
+      tanggalDibuat: ApiDate.parse(json['tanggal_dibuat']),
       catatanSelesai: json['catatan_selesai']?.toString(),
       alasanDitolak: json['alasan_ditolak']?.toString(),
+      canEdit: json['can_edit'] == true,
+      canBatalkan: json['can_batalkan'] == true,
     );
   }
 
@@ -52,7 +60,36 @@ class PengaduanModel {
       'Diproses' => ComplaintStatusUi.diproses,
       'Selesai' => ComplaintStatusUi.selesai,
       'Ditolak' => ComplaintStatusUi.ditolak,
+      'Dibatalkan' => ComplaintStatusUi.dibatalkan,
       _ => ComplaintStatusUi.terkirim,
     };
+  }
+}
+
+/// Statistik pengaduan — logika sama dengan tab di [ComplaintsListScreen].
+class PengaduanStats {
+  const PengaduanStats({
+    required this.total,
+    required this.aktif,
+    required this.selesai,
+  });
+
+  final int total;
+  final int aktif;
+  final int selesai;
+
+  factory PengaduanStats.fromList(List<PengaduanModel> all) {
+    return PengaduanStats(
+      total: all.length,
+      aktif: all.where((e) => e.isActive).length,
+      selesai: all
+          .where(
+            (e) =>
+                e.status == ComplaintStatusUi.selesai ||
+                e.status == ComplaintStatusUi.ditolak ||
+                e.status == ComplaintStatusUi.dibatalkan,
+          )
+          .length,
+    );
   }
 }

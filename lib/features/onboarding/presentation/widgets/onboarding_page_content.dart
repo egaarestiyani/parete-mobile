@@ -6,6 +6,7 @@ import '../../../shared/widgets/primary_button.dart';
 import '../../domain/entities/onboarding_item.dart';
 import 'onboarding_illustration.dart';
 import 'onboarding_progress_indicator.dart';
+import 'onboarding_welcome_branding.dart';
 
 class OnboardingPageContent extends StatelessWidget {
   const OnboardingPageContent({
@@ -15,6 +16,7 @@ class OnboardingPageContent extends StatelessWidget {
     required this.pageCount,
     required this.onNext,
     required this.onSkip,
+    this.showWelcomeBranding = true,
     super.key,
   });
 
@@ -24,32 +26,31 @@ class OnboardingPageContent extends StatelessWidget {
   final int pageCount;
   final VoidCallback onNext;
   final VoidCallback onSkip;
+  final bool showWelcomeBranding;
 
   @override
   Widget build(BuildContext context) {
     final cardHeight = MediaQuery.sizeOf(context).height * 0.42;
 
+    final isWelcome = item.greeting != null;
+
     return Column(
       children: [
-        if (item.greeting != null) ...[
-          const SizedBox(height: 16),
-          Text(
-            item.greeting!,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              height: 1.1,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ] else
-          const SizedBox(height: 24),
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: OnboardingIllustration(type: item.illustrationType),
-          ),
+          child: isWelcome
+              ? (showWelcomeBranding
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28),
+                        child: OnboardingWelcomeBranding(
+                          greeting: item.greeting!,
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink())
+              : Center(
+                  child: OnboardingIllustration(type: item.illustrationType),
+                ),
         ),
         AnimatedContainer(
           duration: const Duration(milliseconds: 400),
@@ -149,7 +150,7 @@ class _TagBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFE9F5FF),
+        color: AppColors.lightBlueBg,
         borderRadius: BorderRadius.circular(100),
       ),
       child: Text(

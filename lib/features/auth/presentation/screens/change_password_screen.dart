@@ -4,7 +4,10 @@ import 'package:provider/provider.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/utils/phone_number.dart';
+import '../../../shared/widgets/parete_phone_field.dart';
 import '../../../home/presentation/screens/home_dashboard_screen.dart';
+import '../../../shared/widgets/parete_bubble_background.dart';
 import '../../../shared/widgets/parete_logo.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../widgets/rounded_text_field.dart';
@@ -19,8 +22,6 @@ class ChangePasswordScreen extends StatefulWidget {
 }
 
 class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
-  static const Color _headerBlue = Color(0xFF3A8FD9);
-
   final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
@@ -35,6 +36,13 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     _newPasswordController.addListener(_onChanged);
     _confirmPasswordController.addListener(_onChanged);
     _phoneController.addListener(_onChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final hp = context.read<AuthService>().warga?.nomorHp;
+      final local = PhoneNumberUtil.localPartFromStored(hp);
+      if (local.isNotEmpty && _phoneController.text.isEmpty) {
+        _phoneController.text = local;
+      }
+    });
   }
 
   void _onChanged() => setState(() {});
@@ -97,8 +105,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     final titleStyle = Theme.of(context).textTheme.titleLarge;
 
     return Scaffold(
-      body: ColoredBox(
-        color: _headerBlue,
+      body: PareteBubbleBackground(
         child: SafeArea(
           child: Column(
             children: [
@@ -107,6 +114,17 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 child: PareteLogo(variant: PareteLogoVariant.light, height: 52),
               ),
               const SizedBox(height: AppSpacing.xs),
+              const Text(
+                'Sistem Pelayanan & Informasi RT Digital',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
               const Text(
                 'Akses informasi dan layanan RT\ndengan lebih mudah',
                 textAlign: TextAlign.center,
@@ -233,44 +251,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         const SizedBox(height: AppSpacing.lg),
                         Text('Nomor HP', style: titleStyle),
                         const SizedBox(height: AppSpacing.xs),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              height: 52,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: AppColors.border),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text('🇮🇩', style: TextStyle(fontSize: 18)),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    '+62',
-                                    style: TextStyle(
-                                      color: AppColors.darkBlueText,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: RoundedTextField(
-                                controller: _phoneController,
-                                hint: 'Masukkan nomor telepon',
-                                keyboardType: TextInputType.phone,
-                              ),
-                            ),
-                          ],
-                        ),
+                        ParetePhoneField(controller: _phoneController),
                         const SizedBox(height: AppSpacing.xxl),
                         PrimaryButton(
                           label: _submitting ? 'Menyimpan...' : 'Simpan dan Lanjut',

@@ -4,12 +4,15 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/models/permohonan_model.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/permohonan_service.dart';
 
-/// Form pengajuan permohonan dokumen resmi.
+/// Form pengajuan / ubah permohonan dokumen resmi.
 class DocumentSubmissionScreen extends StatefulWidget {
-  const DocumentSubmissionScreen({super.key});
+  const DocumentSubmissionScreen({super.key, this.edit});
+
+  final PermohonanModel? edit;
 
   static const String routeName = '/documents/submit';
 
@@ -35,15 +38,35 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
 
   PlatformFile? _filledTemplateFile;
   PlatformFile? _supportingFile;
+  String _mintaTandaTangan = 'tanpa_ttd';
+  bool _hapusBerkasDiisi = false;
+  bool _hapusDokumenPendukung = false;
 
   static const int _maxFileBytes = 15 * 1024 * 1024;
 
+  bool get _isEdit => widget.edit != null;
   bool get _isOther => _selectedType == _otherLabel;
 
   bool get _canSubmit {
     if (_purposeController.text.trim().isEmpty) return false;
     if (_isOther && _otherTypeController.text.trim().isEmpty) return false;
     return true;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.edit;
+    if (e == null) return;
+    if (_documentTypes.contains(e.jenisDokumen)) {
+      _selectedType = e.jenisDokumen;
+    } else {
+      _selectedType = _otherLabel;
+      _otherTypeController.text = e.jenisDokumenLainnya ?? e.jenisDokumen;
+    }
+    _purposeController.text = e.keperluan;
+    _notesController.text = e.catatanTambahan ?? '';
+    _mintaTandaTangan = e.mintaTandaTangan;
   }
 
   @override
@@ -115,17 +138,45 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
     setState(() => _submitting = true);
     try {
       final api = context.read<AuthService>().api;
-      await PermohonanService(api).submit(
-        jenisDokumen: _selectedType,
-        jenisLainnya: _selectedType == 'Lainnya' ? _otherTypeController.text.trim() : null,
-        keperluan: _purposeController.text.trim(),
-        catatan: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-        berkasDiisi: _filledTemplateFile,
-        dokumenPendukung: _supportingFile,
-      );
+      final service = PermohonanService(api);
+      final jenisLainnya =
+          _selectedType == _otherLabel ? _otherTypeController.text.trim() : null;
+      final catatan =
+          _notesController.text.trim().isEmpty ? null : _notesController.text.trim();
+
+      if (_isEdit) {
+        await service.update(
+          id: widget.edit!.id,
+          jenisDokumen: _selectedType,
+          jenisLainnya: jenisLainnya,
+          keperluan: _purposeController.text.trim(),
+          mintaTandaTangan: _mintaTandaTangan,
+          catatan: catatan,
+          berkasDiisi: _filledTemplateFile,
+          dokumenPendukung: _supportingFile,
+          hapusBerkasDiisi: _hapusBerkasDiisi,
+          hapusDokumenPendukung: _hapusDokumenPendukung,
+        );
+      } else {
+        await service.submit(
+          jenisDokumen: _selectedType,
+          jenisLainnya: jenisLainnya,
+          keperluan: _purposeController.text.trim(),
+          mintaTandaTangan: _mintaTandaTangan,
+          catatan: catatan,
+          berkasDiisi: _filledTemplateFile,
+          dokumenPendukung: _supportingFile,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pengajuan dokumen berhasil dikirim ke Admin RT.')),
+        SnackBar(
+          content: Text(
+            _isEdit
+                ? 'Permohonan berhasil diperbarui.'
+                : 'Pengajuan dokumen berhasil dikirim ke Admin RT.',
+          ),
+        ),
       );
       Navigator.of(context).pop();
     } catch (e) {
@@ -234,15 +285,15 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: AppColors.screenBackground,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: const Color(0xFF2E7DBC),
+        backgroundColor: AppColors.primaryBlue,
         foregroundColor: Colors.white,
         centerTitle: true,
-        title: const Text(
-          'Pengajuan Dokumen',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        title: Text(
+          _isEdit ? 'Ubah Permohonan' : 'Pengajuan Dokumen',
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
         ),
         leading: IconButton(
           onPressed: () => Navigator.of(context).maybePop(),
@@ -328,20 +379,77 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
+                  const Text(
+                    'Format Surat dari RT',
+                    style: TextStyle(
+                      color: AppColors.darkBlueText,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  RadioGroup<String>(
+                    groupValue: _mintaTandaTangan,
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _mintaTandaTangan = v);
+                    },
+                    child: Column(
+                      children: [
+                        RadioListTile<String>(
+                          value: 'tanpa_ttd',
+                          title: const Text(
+                            'Tanpa tanda tangan RT',
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          ),
+                          subtitle: const Text(
+                            'Surat resmi tanpa tanda tangan (PDF/DOCX)',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                        RadioListTile<String>(
+                          value: 'dengan_ttd',
+                          title: const Text(
+                            'Dengan tanda tangan RT',
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          ),
+                          subtitle: const Text(
+                            'Surat yang sudah ditandatangani Ketua RT',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
                   _uploadTile(
                     title: 'Unggah Dokumen yang Sudah Diisi (Opsional)',
-                    helper: 'Unggah file PDF atau DOC jika Anda sudah mengisi template.',
+                    helper: _isEdit
+                        ? 'Kosongkan untuk menghapus file lama, atau pilih file baru untuk mengganti.'
+                        : 'Unggah file PDF atau DOC jika Anda sudah mengisi template.',
                     file: _filledTemplateFile,
                     onPick: () => _pickPdfDoc(filledTemplate: true),
-                    onClear: () => setState(() => _filledTemplateFile = null),
+                    onClear: () => setState(() {
+                      _filledTemplateFile = null;
+                      if (_isEdit) _hapusBerkasDiisi = true;
+                    }),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   _uploadTile(
                     title: 'Dokumen Pendukung (Opsional)',
-                    helper: 'Contoh: KTP, Kartu Keluarga, atau dokumen pendukung lainnya.',
+                    helper: _isEdit
+                        ? 'Kosongkan untuk menghapus file lama, atau pilih file baru untuk mengganti.'
+                        : 'Contoh: KTP, Kartu Keluarga, atau dokumen pendukung lainnya.',
                     file: _supportingFile,
                     onPick: () => _pickPdfDoc(filledTemplate: false),
-                    onClear: () => setState(() => _supportingFile = null),
+                    onClear: () => setState(() {
+                      _supportingFile = null;
+                      if (_isEdit) _hapusDokumenPendukung = true;
+                    }),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   const Text(
@@ -364,7 +472,7 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE8F3FC),
+                      color: AppColors.lightBlueBg,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
                     ),
@@ -399,7 +507,7 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
             child: SafeArea(
               top: false,
               child: FilledButton(
-                onPressed: _canSubmit ? _submit : null,
+                onPressed: _canSubmit && !_submitting ? _submit : null,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primaryBlue,
                   disabledBackgroundColor: AppColors.border,
@@ -408,10 +516,16 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
                   minimumSize: const Size(double.infinity, 52),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                child: const Text(
-                  'Kirim Pengajuan',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                ),
+                child: _submitting
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : Text(
+                        _isEdit ? 'Simpan Perubahan' : 'Kirim Pengajuan',
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                      ),
               ),
             ),
           ),

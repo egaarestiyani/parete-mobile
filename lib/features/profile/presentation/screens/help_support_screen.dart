@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_contact.dart';
 import '../../../../core/constants/app_spacing.dart';
 
 /// Bantuan & dukungan — kontak admin RT dan FAQ.
@@ -10,8 +11,8 @@ class HelpSupportScreen extends StatelessWidget {
 
   static const String routeName = '/help-support';
 
-  static final Uri _waUri = Uri.parse('https://wa.me/628907654321');
-  static final Uri _emailUri = Uri.parse('mailto:rt05.malabar@email.com');
+  static final Uri _waUri = AppContact.adminWhatsApp;
+  static final Uri _emailUri = AppContact.adminEmail;
   static final Uri _instagramUri = Uri.parse('https://instagram.com/rt05_malabar');
   static final Uri _facebookUri = Uri.parse('https://facebook.com');
 
@@ -52,10 +53,10 @@ class HelpSupportScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: AppColors.screenBackground,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: const Color(0xFF2E7DBC),
+        backgroundColor: AppColors.primaryBlue,
         foregroundColor: Colors.white,
         centerTitle: true,
         title: const Text(

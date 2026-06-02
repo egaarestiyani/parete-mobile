@@ -1,12 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../app/main_tab_navigation.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
-import '../../../../app/main_tab_navigation.dart';
+import '../../../../core/models/informasi_model.dart';
+import '../../../../core/models/pengaduan_model.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/dashboard_service.dart';
+import '../../../../core/services/informasi_service.dart';
+import '../../../../core/utils/api_date.dart';
+import '../../../../core/utils/greeting_helper.dart';
 import '../../../complaints/presentation/screens/complaints_list_screen.dart';
 import '../../../documents/presentation/screens/documents_screen.dart';
+import '../../../information/presentation/screens/informasi_detail_screen.dart';
 import '../../../information/presentation/screens/information_screen.dart';
+import '../../../search/presentation/screens/search_screen.dart';
+import '../widgets/more_menu_sheet.dart';
 import '../../../shared/widgets/parete_logo.dart';
+import '../../../shared/widgets/parete_network_image.dart';
 
 /// Beranda setelah pengguna menyelesaikan ganti kata sandi / data awal.
 class HomeDashboardScreen extends StatefulWidget {
@@ -21,14 +34,88 @@ class HomeDashboardScreen extends StatefulWidget {
 class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   int _bannerIndex = 0;
   int _navIndex = 0;
+  bool _loading = true;
+  String? _error;
+  List<InformasiModel> _informasiBanner = [];
+  List<PengaduanModel> _pengaduanTerbaru = [];
 
-  static const Color _headerBlue = Color(0xFF3A8FD9);
-  static const Color _headerBlueLight = Color(0xFF5CB4F0);
+  static const Color _headerBlue = AppColors.primaryBlue;
+  static const Color _headerBlueLight = AppColors.primaryBlueLight;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboard();
+  }
+
+  Future<void> _loadDashboard() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final auth = context.read<AuthService>();
+      await auth.refreshWarga();
+      final api = auth.api;
+      final dash = await DashboardService(api).fetch();
+      var informasi = _hanyaPengumuman(dash.informasi);
+      if (informasi.isEmpty) {
+        try {
+          informasi = _hanyaPengumuman(
+            await InformasiService(api).fetch(jenis: InformasiJenis.pengumuman),
+          );
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      setState(() {
+        _informasiBanner = informasi;
+        _pengaduanTerbaru = dash.pengaduan;
+        _bannerIndex = 0;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      try {
+        final auth = context.read<AuthService>();
+        final informasi = _hanyaPengumuman(
+          await InformasiService(auth.api).fetch(jenis: InformasiJenis.pengumuman),
+        );
+        if (!mounted) return;
+        setState(() {
+          _informasiBanner = informasi;
+          _pengaduanTerbaru = [];
+          _bannerIndex = 0;
+          _loading = false;
+          _error = informasi.isEmpty ? e.toString().replaceFirst('Exception: ', '') : null;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _error = e.toString().replaceFirst('Exception: ', '');
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  List<InformasiModel> _hanyaPengumuman(List<InformasiModel> items) {
+    return items.where((e) => e.jenis == InformasiJenis.pengumuman).toList();
+  }
+
+  void _openInformasiDetail(InformasiModel item) {
+    Navigator.pushNamed(
+      context,
+      InformasiDetailScreen.routeName,
+      arguments: item,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final namaWarga = context.watch<AuthService>().warga?.namaKepalaKeluarga ?? 'Warga';
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: AppColors.screenBackground,
       body: Stack(
         children: [
           Column(
@@ -36,7 +123,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               _HeaderBlock(
                 blue: _headerBlue,
                 blueLight: _headerBlueLight,
+                namaWarga: namaWarga,
                 onNotificationTap: () {},
+                onSearchTap: () => Navigator.pushNamed(context, SearchScreen.routeName),
               ),
               Expanded(
                 child: Transform.translate(
@@ -61,26 +150,68 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                               context,
                               DocumentsScreen.routeName,
                             ),
+                            onLainnyaTap: () => MoreMenuSheet.show(context),
                           ),
                         ),
-                        const SizedBox(height: AppSpacing.md),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                          child: _FeaturedBanner(
-                            pageIndex: _bannerIndex,
-                            onPageChanged: (i) => setState(() => _bannerIndex = i),
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                          child: _LatestSection(
-                            onLihatSemua: () => Navigator.pushNamed(
-                              context,
-                              ComplaintsListScreen.routeName,
+                        if (_loading)
+                          const Padding(
+                            padding: EdgeInsets.all(AppSpacing.xl),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else ...[
+                          if (_error != null)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                              child: Material(
+                                color: AppColors.warningBg,
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(AppSpacing.sm),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          _error!,
+                                          style: const TextStyle(
+                                            color: AppColors.warningText,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: _loadDashboard,
+                                        child: const Text('Muat ulang'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (_informasiBanner.isNotEmpty) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                              child: _FeaturedBanner(
+                                items: _informasiBanner,
+                                pageIndex: _bannerIndex,
+                                onPageChanged: (i) => setState(() => _bannerIndex = i),
+                                onBacaSelengkapnya: _openInformasiDetail,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: AppSpacing.lg),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                            child: _LatestSection(
+                              items: _pengaduanTerbaru,
+                              onLihatSemua: () => Navigator.pushNamed(
+                                context,
+                                ComplaintsListScreen.routeName,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
@@ -107,15 +238,21 @@ class _HeaderBlock extends StatelessWidget {
   const _HeaderBlock({
     required this.blue,
     required this.blueLight,
+    required this.namaWarga,
     required this.onNotificationTap,
+    required this.onSearchTap,
   });
 
   final Color blue;
   final Color blueLight;
+  final String namaWarga;
   final VoidCallback onNotificationTap;
+  final VoidCallback onSearchTap;
 
   @override
   Widget build(BuildContext context) {
+    final greeting = greetingForTime();
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -140,9 +277,9 @@ class _HeaderBlock extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Selamat Pagi ☀️',
-                          style: TextStyle(
+                        Text(
+                          greeting.full,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -150,7 +287,7 @@ class _HeaderBlock extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Yulian Adiprana',
+                          namaWarga,
                           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w800,
@@ -182,7 +319,7 @@ class _HeaderBlock extends StatelessWidget {
                 ),
                 child: TextField(
                   readOnly: true,
-                  onTap: () {},
+                  onTap: onSearchTap,
                   style: const TextStyle(
                     color: AppColors.darkBlueText,
                     fontWeight: FontWeight.w600,
@@ -195,7 +332,7 @@ class _HeaderBlock extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                       fontSize: 15,
                     ),
-                    prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8C96AB)),
+                    prefixIcon: const Icon(Icons.search_rounded, color: AppColors.iconMuted),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
                   ),
@@ -214,11 +351,13 @@ class _QuickActionsCard extends StatelessWidget {
     required this.onPengaduanTap,
     required this.onInformasiTap,
     required this.onDokumenTap,
+    required this.onLainnyaTap,
   });
 
   final VoidCallback onPengaduanTap;
   final VoidCallback onInformasiTap;
   final VoidCallback onDokumenTap;
+  final VoidCallback onLainnyaTap;
 
   @override
   Widget build(BuildContext context) {
@@ -253,7 +392,11 @@ class _QuickActionsCard extends StatelessWidget {
             label: 'Dokumen',
             onTap: onDokumenTap,
           ),
-          const _QuickActionItem(icon: Icons.grid_view_rounded, label: 'Lainnya'),
+          _QuickActionItem(
+            icon: Icons.grid_view_rounded,
+            label: 'Lainnya',
+            onTap: onLainnyaTap,
+          ),
         ],
       ),
     );
@@ -306,29 +449,41 @@ class _QuickActionItem extends StatelessWidget {
 }
 
 class _FeaturedBanner extends StatelessWidget {
-  const _FeaturedBanner({required this.pageIndex, required this.onPageChanged});
+  const _FeaturedBanner({
+    required this.items,
+    required this.pageIndex,
+    required this.onPageChanged,
+    required this.onBacaSelengkapnya,
+  });
 
+  final List<InformasiModel> items;
   final int pageIndex;
   final ValueChanged<int> onPageChanged;
+  final ValueChanged<InformasiModel> onBacaSelengkapnya;
 
   @override
   Widget build(BuildContext context) {
+    final count = items.length;
     return Column(
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: AspectRatio(
             aspectRatio: 16 / 9,
-            child: PageView(
+            child: PageView.builder(
               onPageChanged: onPageChanged,
-              children: List.generate(3, (_) => const _BannerPage()),
+              itemCount: count,
+              itemBuilder: (context, index) => _BannerPage(
+                item: items[index],
+                onBacaSelengkapnya: () => onBacaSelengkapnya(items[index]),
+              ),
             ),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(3, (i) {
+          children: List.generate(count, (i) {
             final active = i == pageIndex;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -336,7 +491,7 @@ class _FeaturedBanner extends StatelessWidget {
               width: active ? 18 : 7,
               height: 7,
               decoration: BoxDecoration(
-                color: active ? AppColors.yellow : const Color(0xFFD0D7E4),
+                color: active ? AppColors.yellow : AppColors.progressInactive,
                 borderRadius: BorderRadius.circular(8),
               ),
             );
@@ -348,12 +503,18 @@ class _FeaturedBanner extends StatelessWidget {
 }
 
 class _BannerPage extends StatelessWidget {
-  const _BannerPage();
+  const _BannerPage({
+    required this.item,
+    required this.onBacaSelengkapnya,
+  });
+
+  final InformasiModel item;
+  final VoidCallback onBacaSelengkapnya;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.primaryBlue,
+      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Row(
         children: [
@@ -361,12 +522,15 @@ class _BannerPage extends StatelessWidget {
             flex: 11,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const PareteLogo(variant: PareteLogoVariant.light, height: 22),
-                const SizedBox(height: AppSpacing.sm),
-                const Text(
-                  'Kerja Bakti Massal',
-                  style: TextStyle(
+                const PareteLogo(variant: PareteLogoVariant.light, height: 20),
+                const SizedBox(height: 6),
+                Text(
+                  item.judul,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
@@ -374,30 +538,34 @@ class _BannerPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'Warga dihimbau hadir pada 5 Maret 2026 pukul 07.00 di area RT 05.',
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                    height: 1.35,
+                Flexible(
+                  child: Text(
+                    item.ringkasan,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      height: 1.3,
+                    ),
                   ),
                 ),
-                const Spacer(),
+                const SizedBox(height: 8),
                 FilledButton(
-                  onPressed: () {},
+                  onPressed: onBacaSelengkapnya,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: AppColors.primaryBlue,
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    minimumSize: const Size(0, 36),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
                   ),
                   child: const Text(
                     'Baca Selengkapnya',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
                   ),
                 ),
               ],
@@ -408,11 +576,11 @@ class _BannerPage extends StatelessWidget {
             flex: 9,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(14),
-              child: ColoredBox(
-                color: Colors.white.withValues(alpha: 0.15),
-                child: const Center(
-                  child: Icon(Icons.groups_rounded, color: Colors.white70, size: 56),
-                ),
+              child: PareteNetworkImage(
+                url: item.gambarUrl,
+                placeholderIcon: item.jenis == InformasiJenis.kegiatan
+                    ? Icons.groups_rounded
+                    : Icons.campaign_outlined,
               ),
             ),
           ),
@@ -423,8 +591,12 @@ class _BannerPage extends StatelessWidget {
 }
 
 class _LatestSection extends StatelessWidget {
-  const _LatestSection({required this.onLihatSemua});
+  const _LatestSection({
+    required this.items,
+    required this.onLihatSemua,
+  });
 
+  final List<PengaduanModel> items;
   final VoidCallback onLihatSemua;
 
   @override
@@ -453,19 +625,46 @@ class _LatestSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        ...List.generate(
-          3,
-          (_) => Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: _LatestCard(),
+        if (items.isEmpty)
+          Text(
+            'Belum ada pengaduan terbaru.',
+            style: TextStyle(
+              color: AppColors.mutedText.withValues(alpha: 0.9),
+              fontWeight: FontWeight.w600,
+            ),
+          )
+        else
+          ...items.map(
+            (p) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _LatestCard(pengaduan: p),
+            ),
           ),
-        ),
       ],
     );
   }
 }
 
 class _LatestCard extends StatelessWidget {
+  const _LatestCard({required this.pengaduan});
+
+  final PengaduanModel pengaduan;
+
+  String get _statusLabel => switch (pengaduan.status) {
+        ComplaintStatusUi.terkirim => 'Terkirim',
+        ComplaintStatusUi.diterima => 'Diterima',
+        ComplaintStatusUi.diproses => 'Diproses',
+        ComplaintStatusUi.selesai => 'Selesai',
+        ComplaintStatusUi.ditolak => 'Ditolak',
+        ComplaintStatusUi.dibatalkan => 'Dibatalkan',
+      };
+
+  String get _dateLabel {
+    final d = pengaduan.tanggalDibuat;
+    if (d == null) return '-';
+    return ApiDate.formatDate(d);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -482,9 +681,9 @@ class _LatestCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Lampu Jalan Gang Mawar Mati',
-                  style: TextStyle(
+                Text(
+                  pengaduan.judul,
+                  style: const TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
                     color: AppColors.darkBlueText,
@@ -493,8 +692,8 @@ class _LatestCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Pengaduan • 5 Mar 2025',
-                  style: TextStyle(
+                  'Pengaduan • $_dateLabel',
+                  style: const TextStyle(
                     color: AppColors.mutedText,
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
@@ -507,12 +706,12 @@ class _LatestCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: const Color(0xFFE8F3FC),
+              color: AppColors.lightBlueBg,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Text(
-              'Diproses',
-              style: TextStyle(
+            child: Text(
+              _statusLabel,
+              style: const TextStyle(
                 color: AppColors.primaryBlue,
                 fontWeight: FontWeight.w700,
                 fontSize: 11,

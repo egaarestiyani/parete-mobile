@@ -6,6 +6,7 @@ class DokumenModel {
     required this.kategori,
     required this.ukuranByte,
     required this.downloadPath,
+    this.sudahDiunduh = false,
   });
 
   final String id;
@@ -14,6 +15,7 @@ class DokumenModel {
   final String kategori;
   final int ukuranByte;
   final String downloadPath;
+  final bool sudahDiunduh;
 
   String get ukuranLabel {
     if (ukuranByte < 1024) return '$ukuranByte B';
@@ -31,7 +33,13 @@ class DokumenModel {
       kategori: json['kategori']?.toString() ?? '',
       ukuranByte: int.tryParse(json['ukuran_byte']?.toString() ?? '') ?? 0,
       downloadPath: json['download_url']?.toString() ?? '',
+      sudahDiunduh: json['sudah_diunduh'] == true,
     );
+  }
+
+  String get fileName {
+    final safe = nama.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+    return '$safe.$tipe';
   }
 }
 

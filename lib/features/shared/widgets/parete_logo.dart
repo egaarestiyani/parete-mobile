@@ -33,6 +33,9 @@ class PareteLogo extends StatelessWidget {
       height: height,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.high,
+      gaplessPlayback: true,
+      excludeFromSemantics: true,
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
     );
   }
 }

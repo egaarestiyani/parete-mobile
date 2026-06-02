@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../core/services/auth_service.dart';
 import '../../../auth/presentation/screens/login_screen.dart';
 import '../../../home/presentation/screens/home_dashboard_screen.dart';
-import '../../../../core/config/app_config.dart';
 import '../../data/onboarding_dummy_data.dart';
-import '../../../shared/widgets/parete_logo.dart';
 import '../widgets/onboarding_background.dart';
 import '../widgets/onboarding_page_content.dart';
+import '../widgets/onboarding_welcome_branding.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
-  static const String routeName = '/';
+  static const String routeName = '/onboarding';
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -24,16 +25,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   late final Animation<double> _whiteBg;
   late final Animation<double> _blueBg;
-  late final Animation<double> _logoLightness;
   late final Animation<double> _logoScale;
-  late final Animation<double> _logoExit;
+  late final Animation<double> _logoLightness;
+  late final Animation<double> _logoOpacity;
+  late final Animation<double> _greetingOpacity;
+  late final Animation<double> _subtitleOpacity;
   late final Animation<double> _blobReveal;
-  late final Animation<double> _welcomeReveal;
+  late final Animation<double> _overlayFade;
+  late final Animation<double> _pageReveal;
 
   int _currentIndex = 0;
   bool _introComplete = false;
 
-  static const _introDuration = Duration(milliseconds: 4200);
+  static const _introDuration = Duration(milliseconds: 3000);
+  static const _welcomeGreeting = 'Halo, Warga!';
 
   @override
   void initState() {
@@ -42,58 +47,73 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _pageController = PageController();
     _introController = AnimationController(vsync: this, duration: _introDuration);
 
+    final curved = CurvedAnimation(parent: _introController, curve: Curves.easeInOut);
+
     _whiteBg = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0, end: 1), weight: 12),
-      TweenSequenceItem(tween: ConstantTween(1), weight: 18),
-      TweenSequenceItem(tween: Tween(begin: 1, end: 0), weight: 18),
-      TweenSequenceItem(tween: ConstantTween(0), weight: 52),
-    ]).animate(CurvedAnimation(parent: _introController, curve: Curves.easeInOut));
+      TweenSequenceItem(tween: Tween(begin: 0, end: 1), weight: 8),
+      TweenSequenceItem(tween: Tween(begin: 1, end: 0), weight: 12),
+      TweenSequenceItem(tween: ConstantTween(0), weight: 80),
+    ]).animate(curved);
 
-    _blueBg = TweenSequence<double>([
-      TweenSequenceItem(tween: ConstantTween(0), weight: 25),
-      TweenSequenceItem(tween: Tween(begin: 0, end: 1), weight: 20),
-      TweenSequenceItem(tween: ConstantTween(1), weight: 55),
-    ]).animate(CurvedAnimation(parent: _introController, curve: Curves.easeInOut));
+    _blueBg = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.05, 0.35, curve: Curves.easeOut),
+      ),
+    );
 
-    _logoScale = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0.75, end: 1)
-            .chain(CurveTween(curve: Curves.easeOutBack)),
-        weight: 18,
+    _logoScale = Tween<double>(begin: 0.82, end: 1).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.1, 0.45, curve: Curves.easeOutBack),
       ),
-      TweenSequenceItem(tween: ConstantTween(1), weight: 52),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1, end: 0.85)
-            .chain(CurveTween(curve: Curves.easeInCubic)),
-        weight: 30,
-      ),
-    ]).animate(_introController);
+    );
 
-    _logoLightness = TweenSequence<double>([
-      TweenSequenceItem(tween: ConstantTween<double>(0), weight: 30),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 1).chain(CurveTween(curve: Curves.easeInOut)),
-        weight: 18,
+    _logoLightness = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.2, 0.5, curve: Curves.easeInOut),
       ),
-      TweenSequenceItem(tween: ConstantTween<double>(1), weight: 52),
-    ]).animate(_introController);
+    );
 
-    _logoExit = TweenSequence<double>([
-      TweenSequenceItem(tween: ConstantTween<double>(0), weight: 58),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 1).chain(CurveTween(curve: Curves.easeInCubic)),
-        weight: 42,
+    _logoOpacity = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.1, 0.4, curve: Curves.easeOut),
       ),
-    ]).animate(_introController);
+    );
+
+    _greetingOpacity = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.42, 0.62, curve: Curves.easeOut),
+      ),
+    );
+
+    _subtitleOpacity = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.48, 0.68, curve: Curves.easeOut),
+      ),
+    );
 
     _blobReveal = CurvedAnimation(
       parent: _introController,
-      curve: const Interval(0.38, 0.58, curve: Curves.easeOut),
+      curve: const Interval(0.15, 0.4, curve: Curves.easeOut),
     );
 
-    _welcomeReveal = CurvedAnimation(
-      parent: _introController,
-      curve: const Interval(0.58, 1, curve: Curves.easeOutCubic),
+    _overlayFade = Tween<double>(begin: 1, end: 0).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.78, 1, curve: Curves.easeInOut),
+      ),
+    );
+
+    _pageReveal = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.72, 1, curve: Curves.easeOutCubic),
+      ),
     );
 
     _introController.forward().whenComplete(() {
@@ -109,11 +129,15 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     super.dispose();
   }
 
-  void _finishOnboarding() {
-    final destination = AppConfig.authEnabled
-        ? LoginScreen.routeName
-        : HomeDashboardScreen.routeName;
-    Navigator.pushReplacementNamed(context, destination);
+  Future<void> _finishOnboarding() async {
+    final auth = context.read<AuthService>();
+    await auth.completeOnboarding();
+    if (!mounted) return;
+    if (auth.isLoggedIn) {
+      Navigator.pushReplacementNamed(context, HomeDashboardScreen.routeName);
+    } else {
+      Navigator.pushReplacementNamed(context, LoginScreen.routeName);
+    }
   }
 
   void _onNext() {
@@ -151,14 +175,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   Widget _buildIntroOverlay() {
-    final showWelcome = _welcomeReveal.value > 0;
-    final logoYOffset = -_logoExit.value * 120;
-    final logoOpacity = (1 - _logoExit.value).clamp(0.0, 1.0);
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (!showWelcome) ...[
+    return IgnorePointer(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
           ColoredBox(color: Colors.white.withValues(alpha: _whiteBg.value)),
           Opacity(
             opacity: _blueBg.value,
@@ -167,37 +187,35 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               blobOpacity: _blobReveal.value,
             ),
           ),
-        ],
-        if (logoOpacity > 0)
-          IgnorePointer(
+          Opacity(
+            opacity: _overlayFade.value.clamp(0, 1),
             child: Center(
-              child: Transform.translate(
-                offset: Offset(0, logoYOffset),
-                child: Opacity(
-                  opacity: logoOpacity,
-                  child: Transform.scale(
-                    scale: _logoScale.value,
-                    child: PareteLogoCrossfade(
-                      lightness: _logoLightness.value,
-                      height: 52,
-                    ),
-                  ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: OnboardingWelcomeBranding(
+                  greeting: _welcomeGreeting,
+                  logoLightness: _logoLightness.value,
+                  logoScale: _logoScale.value,
+                  logoOpacity: _logoOpacity.value,
+                  greetingOpacity: _greetingOpacity.value,
+                  subtitleOpacity: _subtitleOpacity.value,
                 ),
               ),
             ),
           ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildOnboardingPages() {
     final items = OnboardingDummyData.items;
-    final welcomeOpacity = _introComplete ? 1.0 : _welcomeReveal.value;
+    final pageOpacity = _introComplete ? 1.0 : _pageReveal.value;
 
     return Opacity(
-      opacity: welcomeOpacity.clamp(0.0, 1.0),
+      opacity: pageOpacity.clamp(0, 1),
       child: Transform.translate(
-        offset: Offset(0, _introComplete ? 0 : (1 - _welcomeReveal.value) * 36),
+        offset: Offset(0, _introComplete ? 0 : (1 - _pageReveal.value) * 20),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -222,6 +240,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       pageCount: items.length,
                       onNext: _onNext,
                       onSkip: _onSkip,
+                      showWelcomeBranding: _introComplete || _pageReveal.value > 0.5,
                     ),
                   );
                 },

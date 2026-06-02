@@ -24,4 +24,4 @@ Write-Host "Jika Android toolchain belum lengkap, buka Android Studio > SDK Mana
 Write-Host ""
 
 flutter pub get
-flutter run
+flutter run --dart-define=PARETE_API_URL=http://10.0.2.2:8000

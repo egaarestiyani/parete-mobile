@@ -1,29 +1,19 @@
-import 'package:flutter/foundation.dart';
-
 class ApiConfig {
   const ApiConfig._();
 
-  /// URL backend Laravel (`php artisan serve`).
+  /// URL backend Laravel (`php artisan serve --host=0.0.0.0 --port=8000`).
   ///
-  /// - Windows / iOS simulator: `http://127.0.0.1:8000`
-  /// - Android emulator: `http://10.0.2.2:8000`
-  /// - HP fisik (Wi‑Fi sama): `http://<IP-Laptop>:8000`
-  ///
+  /// Default: IP laptop di jaringan lokal (bukan localhost).
   /// Override saat run:
-  /// `flutter run --dart-define=PARETE_API_URL=http://10.0.2.2:8000`
+  /// `flutter run --dart-define=PARETE_API_URL=http://192.168.0.142:8000`
   static String get baseUrl {
     const fromEnv = String.fromEnvironment('PARETE_API_URL');
     if (fromEnv.isNotEmpty) {
       return fromEnv;
     }
-    if (kIsWeb) {
-      return 'http://127.0.0.1:8000';
-    }
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:8000';
-    }
-    return 'http://127.0.0.1:8000';
+    return 'http://192.168.0.142:8000';
   }
 
+  /// Base path API: `http://192.168.0.142:8000/api`
   static String get apiBase => '$baseUrl/api';
 }

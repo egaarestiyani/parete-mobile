@@ -80,13 +80,44 @@ class ApiClient {
   }
 
   String messageFromError(DioException error) {
+    // Log mentah ke Debug Console (Android Studio / VS Code / `flutter run`)
+    // agar statusCode + body terlihat saat UI hanya menampilkan pesan singkat.
+    // ignore: avoid_print
+    print('[API ERROR] ${error.toString()}');
+    // ignore: avoid_print
+    print('[API ERROR] type=${error.type}');
+    // ignore: avoid_print
+    print('[API ERROR] statusCode=${error.response?.statusCode}');
+    // ignore: avoid_print
+    print('[API ERROR] body=${error.response?.data}');
+    // ignore: avoid_print
+    print('[API ERROR] uri=${error.requestOptions.uri}');
+
     final data = error.response?.data;
-    if (data is Map && data['message'] is String) {
-      return data['message'] as String;
+    if (data is Map) {
+      final message = data['message'];
+      final code = data['error_code'];
+      if (message is String && message.isNotEmpty) {
+        if (code is String && code.isNotEmpty) {
+          return '$message [$code]';
+        }
+        return message;
+      }
+      final errors = data['errors'];
+      if (errors is Map && errors.isNotEmpty) {
+        final first = errors.values.first;
+        if (first is List && first.isNotEmpty) {
+          return first.first.toString();
+        }
+      }
     }
     if (error.type == DioExceptionType.connectionError) {
-      return 'Tidak dapat terhubung ke server. Pastikan backend Laravel berjalan.';
+      return 'Tidak dapat terhubung ke server. Pastikan backend Laravel berjalan di ${ApiConfig.baseUrl}.';
     }
-    return 'Terjadi kesalahan. Coba lagi.';
+    final status = error.response?.statusCode;
+    if (status != null) {
+      return 'Terjadi kesalahan (HTTP $status). Coba lagi.';
+    }
+    return 'Terjadi kesalahan. Coba lagi. (${error.type})';
   }
 }

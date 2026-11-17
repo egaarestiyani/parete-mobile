@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../api/api_client.dart';
 import '../api/auth_storage.dart';
+import '../config/api_config.dart';
 import '../config/app_config.dart';
 import '../models/warga_model.dart';
 import '../utils/phone_number.dart';
@@ -94,6 +95,10 @@ class AuthService extends ChangeNotifier {
     _loading = true;
     notifyListeners();
     try {
+      debugPrint('[LOGIN] POST ${ApiConfig.apiBase}/auth/login');
+      debugPrint(
+        '[LOGIN] payload id_keluarga=${idKeluarga.trim().toUpperCase()}',
+      );
       final res = await _api.post<Map<String, dynamic>>(
         '/auth/login',
         data: {
@@ -101,6 +106,7 @@ class AuthService extends ChangeNotifier {
           'password': password,
         },
       );
+      debugPrint('[LOGIN] OK status=${res.statusCode} body=${res.data}');
       final token = res.data?['token']?.toString();
       final wargaJson = res.data?['warga'];
       if (token == null || wargaJson is! Map<String, dynamic>) {
@@ -127,7 +133,18 @@ class AuthService extends ChangeNotifier {
       }
       return _warga!;
     } on DioException catch (e) {
+      debugPrint('[LOGIN] DioException: ${e.toString()}');
+      debugPrint('[LOGIN] type=${e.type}');
+      debugPrint('[LOGIN] statusCode=${e.response?.statusCode}');
+      debugPrint('[LOGIN] response.body=${e.response?.data}');
+      debugPrint('[LOGIN] request.path=${e.requestOptions.path}');
+      debugPrint('[LOGIN] request.baseUrl=${e.requestOptions.baseUrl}');
+      debugPrint('[LOGIN] request.uri=${e.requestOptions.uri}');
       throw Exception(_api.messageFromError(e));
+    } catch (e, st) {
+      debugPrint('[LOGIN] Error: ${e.toString()}');
+      debugPrint('[LOGIN] Stack: $st');
+      rethrow;
     } finally {
       _loading = false;
       notifyListeners();
